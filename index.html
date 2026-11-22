@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="si"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sticker Designer</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Sinhala:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--tx:#1b1d22;--ac:#7c3aed;--bd:#d9dce3}
+@media(prefers-color-scheme:dark){:root{--bg:#16171b;--card:#222429;--tx:#eceef2;--bd:#3a3d45}}
+*{box-sizing:border-box}body{margin:0;font:14px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+.ui{max-width:1200px;margin:auto;padding:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:12px}
+input,select,button,textarea{font:inherit;padding:6px 8px;border:1px solid var(--bd);border-radius:6px;background:var(--card);color:var(--tx)}
+button{cursor:pointer}button.p{background:var(--ac);color:#fff;border-color:var(--ac)}
+.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+label{display:flex;flex-direction:column;font-size:12px;gap:2px}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+nav button.on{background:var(--ac);color:#fff}
+table{width:100%;border-collapse:collapse}td,th{padding:3px;text-align:left}td input{width:100%}
+#login{max-width:320px;margin:15vh auto}#login input{width:100%;margin-bottom:8px}
+.pages{background:#888;padding:10px;overflow:auto}
+.page{background:#fff;position:relative;margin:0 auto 10px;box-shadow:0 2px 8px #0006;overflow:hidden}
+.stk{position:absolute;display:flex;flex-direction:column;justify-content:center;overflow:hidden;color:#000}
+.stk .t{position:relative;z-index:1}.ln{white-space:nowrap;line-height:1.25;overflow:hidden}
+.stk img{position:absolute;top:50%;transform:translateY(-50%);object-fit:contain}
+.hide{display:none!important}.shp *{vector-effect:non-scaling-stroke}
+@media print{body{background:#fff}nav,.card{display:none!important}.ui{padding:0;max-width:none}.pages{padding:0;background:none}.page{margin:0;box-shadow:none;page-break-after:always}}
+</style></head><body>
+<script>
+/* ===== CONFIGURE ===== */
+const SUPABASE_URL='https://nfjoqborzobictlsmavr.supabase.co', SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5mam9xYm9yem9iaWN0bHNtYXZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUzNjAwNjksImV4cCI6MjExMDkzNjA2OX0.pZW91np9iHXhoeAxDDvDJWlK6A78RBFwzwt5khodSF4';
+</script>
+<div id="login" class="card"><h3>Sticker Designer – Login</h3>
+<input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password">
+<button class="p" onclick="login()" style="width:100%">Login</button><p id="lerr" style="color:#c00"></p></div>
+
+<div id="app" class="hide"><div class="ui">
+<nav id="nav"></nav>
+<!-- DESIGNER -->
+<section id="v-des"><div class="card"><div class="g">
+<label>Paper<select id="paper"><option value="210,297">A4</option><option value="148,210">A5</option><option value="297,420">A3</option><option value="420,594">A2</option><option value="105,148">A6</option><option value="215.9,279.4">Letter</option><option value="215.9,355.6">Legal</option><option value="c">Custom…</option></select></label>
+<label>Orientation<select id="ori"><option>Portrait</option><option>Landscape</option></select></label>
+<label>Sticker W (mm)<input id="sw" type="number" value="90"></label>
+<label>Sticker H (mm)<input id="sh" type="number" value="45"></label>
+<label>Margin (mm)<input id="mg" type="number" value="8"></label>
+<label>Gap (mm)<input id="gp" type="number" value="3"></label>
+<label>Fit to page<input id="fp" type="checkbox" style="width:auto"></label>
+<label>Design<select id="dsel"></select></label>
+<label>Name font<select class="fs" id="f1"></select></label>
+<label>Other lines font<select class="fs" id="f2"></select></label>
+<label>Name size (pt)<input id="s1" type="number" value="20"></label>
+<label>Other size (pt)<input id="s2" type="number" value="14"></label></div></div>
+<div class="card"><table id="rows"></table>
+<button onclick="addRow()">+ Row</button> <button class="p" onclick="gen()">Generate</button> <button onclick="print()">Print / PDF</button> <span id="info"></span></div>
+<div class="pages" id="pages"></div></section>
+<!-- SHAPES -->
+<section id="v-shp" class="hide"><div class="card"><div class="g">
+<label>Paper<select id="spaper"><option value="210,297">A4</option><option value="148,210">A5</option><option value="297,420">A3</option><option value="420,594">A2</option><option value="105,148">A6</option><option value="215.9,279.4">Letter</option><option value="215.9,355.6">Legal</option><option value="c">Custom…</option></select></label>
+<label>Orientation<select id="sori"><option>Portrait</option><option>Landscape</option></select></label>
+<label>Margin (mm)<input id="smg" type="number" value="8"></label>
+<label>Gap (mm)<input id="sgp" type="number" value="3"></label>
+<label>Text font<select class="fs" id="sf"></select></label>
+<label>Text size (pt)<input id="sfs" type="number" value="12"></label></div></div>
+<div class="card"><table id="srows"></table><button onclick="addShape()">+ Row</button> <button class="p" onclick="genShapes()">Generate</button> <button onclick="print()">Print / PDF</button> <span id="sinfo"></span></div>
+<div class="pages" id="spages"></div></section>
+<!-- DESIGNS -->
+<section id="v-dsn" class="hide"><div class="card"><h3>Add design</h3><div class="g">
+<label>Name<input id="dn"></label><label>Product<select id="dp"><option value="name_sticker">Name stickers</option><option value="cover">Cover pages</option></select></label><label>Background 1<input id="b1" type="color" value="#ffffff"></label>
+<label>Background 2<input id="b2" type="color" value="#ffffff"></label><label>Border colour<input id="bc" type="color" value="#7c3aed"></label>
+<label>Border (mm)<input id="bw" type="number" value="1" step=".2"></label><label>Border style<select id="bs"><option>solid</option><option>double</option><option>dashed</option><option>dotted</option></select></label>
+<label>Radius (mm)<input id="br" type="number" value="0"></label><label>Align<select id="al"><option>left</option><option>center</option></select></label>
+<label>Image (PNG/JPG)<input id="im" type="file" accept="image/*"></label><label>Image side<select id="is"><option>right</option><option>left</option></select></label>
+<label>Image size (% height)<input id="iz" type="number" value="70"></label></div>
+<p><button onclick="prevD()">Preview</button> <button class="p" onclick="saveD()">Save design</button></p>
+<div id="dprev" style="position:relative;height:50mm"></div></div>
+<div class="card"><h3>Designs</h3><div id="dlist"></div></div></section>
+<!-- FONTS -->
+<section id="v-fnt" class="hide"><div class="card"><h3>Add font</h3><div class="g">
+<label>Name<input id="fn"></label><label>Type<select id="fk"><option value="legacy">Sinhala legacy (FM Abhaya…)</option><option value="unicode">Sinhala Unicode</option><option value="english">English</option></select></label>
+<label>Font file<input id="ff" type="file" accept=".ttf,.otf,.woff,.woff2"></label></div>
+<p><button class="p" onclick="saveF()">Upload</button></p><div id="flist"></div></div></section>
+<!-- USERS -->
+<section id="v-usr" class="hide"><div class="card"><h3>Create account</h3><div class="g">
+<label>Email<input id="ue"></label><label>Password<input id="up" type="password"></label>
+<label>Shop<input id="us"></label><label>Role<select id="ur"><option>user</option><option>admin</option></select></label>
+<label>Products<span><input type="checkbox" class="cp" value="name_sticker" checked> Name <input type="checkbox" class="cp" value="cover"> Cover <input type="checkbox" class="cp" value="shapes"> Shapes</span></label></div>
+<p><button class="p" onclick="mkUser()">Create</button> <span id="umsg"></span></p></div>
+<div class="card"><table id="ulist"></table></div></section>
+</div><div class="pages" id="pp"></div></div>
+
+<script src="app.js"></script></body></html>

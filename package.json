@@ -1,0 +1,1 @@
+{ "name": "sticker-designer", "private": true, "scripts": { "build": "tsc", "watch": "tsc -w" }, "devDependencies": { "typescript": "^5.5.0" } }
