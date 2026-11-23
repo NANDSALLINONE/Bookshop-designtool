@@ -28,7 +28,7 @@ table{width:100%;border-collapse:collapse}td,th{padding:3px;text-align:left}td i
 </style></head><body>
 <script>
 /* ===== CONFIGURE ===== */
-const SUPABASE_URL='https://nfjoqborzobictlsmavr.supabase.co', SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5mam9xYm9yem9iaWN0bHNtYXZyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUzNjAwNjksImV4cCI6MjExMDkzNjA2OX0.pZW91np9iHXhoeAxDDvDJWlK6A78RBFwzwt5khodSF4';
+const SUPABASE_URL='https://YOUR-PROJECT.supabase.co', SUPABASE_KEY='YOUR-ANON-KEY';
 </script>
 <div id="login" class="card"><h3>Sticker Designer – Login</h3>
 <input id="em" type="email" placeholder="Email"><input id="pw" type="password" placeholder="Password">
@@ -45,7 +45,8 @@ const SUPABASE_URL='https://nfjoqborzobictlsmavr.supabase.co', SUPABASE_KEY='eyJ
 <label>Margin (mm)<input id="mg" type="number" value="8"></label>
 <label>Gap (mm)<input id="gp" type="number" value="3"></label>
 <label>Fit to page<input id="fp" type="checkbox" style="width:auto"></label>
-<label>Design<select id="dsel"></select></label>
+<label>Design (all rows)<select id="dsel" onchange="applyAll()"></select></label>
+<label>Filter designs<select id="dfl" onchange="fillDesigns();renderRows()"></select></label>
 <label>Name font<select class="fs" id="f1"></select></label>
 <label>Other lines font<select class="fs" id="f2"></select></label>
 <label>Name size (pt)<input id="s1" type="number" value="20"></label>
@@ -65,15 +66,20 @@ const SUPABASE_URL='https://nfjoqborzobictlsmavr.supabase.co', SUPABASE_KEY='eyJ
 <div class="pages" id="spages"></div></section>
 <!-- DESIGNS -->
 <section id="v-dsn" class="hide"><div class="card"><h3>Add design</h3><div class="g">
-<label>Name<input id="dn"></label><label>Product<select id="dp"><option value="name_sticker">Name stickers</option><option value="cover">Cover pages</option></select></label><label>Background 1<input id="b1" type="color" value="#ffffff"></label>
+<label>Name<input id="dn"></label><label id="dvl">Visibility<select id="dv"><option value="0">Personal</option><option value="1">Public (all shops)</option></select></label><label>Product<select id="dp"><option value="name_sticker">Name stickers</option><option value="cover">Cover pages</option></select></label><label>Background 1<input id="b1" type="color" value="#ffffff"></label>
 <label>Background 2<input id="b2" type="color" value="#ffffff"></label><label>Border colour<input id="bc" type="color" value="#7c3aed"></label>
 <label>Border (mm)<input id="bw" type="number" value="1" step=".2"></label><label>Border style<select id="bs"><option>solid</option><option>double</option><option>dashed</option><option>dotted</option></select></label>
 <label>Radius (mm)<input id="br" type="number" value="0"></label><label>Align<select id="al"><option>left</option><option>center</option></select></label>
 <label>Image (PNG/JPG)<input id="im" type="file" accept="image/*"></label><label>Image side<select id="is"><option>right</option><option>left</option></select></label>
 <label>Image size (% height)<input id="iz" type="number" value="70"></label></div>
-<p><button onclick="prevD()">Preview</button> <button class="p" onclick="saveD()">Save design</button></p>
+<p><button onclick="prevD()">Preview</button> <button class="p" id="savebtn" onclick="saveD()">Save design</button> <button id="cancelbtn" class="hide" onclick="resetD()">Cancel edit</button></p>
 <div id="dprev" style="position:relative;height:50mm"></div></div>
-<div class="card"><h3>Designs</h3><div id="dlist"></div></div></section>
+<div class="card"><h3>Designs</h3><div class="g" style="margin-bottom:8px">
+<label>Search<input id="fq" oninput="renderLists()"></label>
+<label>Product<select id="fprod" onchange="renderLists()"><option value="">All</option><option value="name_sticker">Name stickers</option><option value="cover">Cover pages</option></select></label>
+<label>Visibility<select id="fvis" onchange="renderLists()"><option value="">All</option><option value="1">Public</option><option value="0">Personal</option></select></label>
+<label>Owner<select id="fown" onchange="renderLists()"></select></label></div>
+<div id="dlist"></div></div></section>
 <!-- FONTS -->
 <section id="v-fnt" class="hide"><div class="card"><h3>Add font</h3><div class="g">
 <label>Name<input id="fn"></label><label>Type<select id="fk"><option value="legacy">Sinhala legacy (FM Abhaya…)</option><option value="unicode">Sinhala Unicode</option><option value="english">English</option></select></label>
