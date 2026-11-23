@@ -4,7 +4,8 @@ const $ = (id) => document.getElementById(id);
 let me;
 let designs = [];
 let fonts = [];
-let rows = [{ n: '', c: '', s: '', sc: '', q: 10 }];
+let rows = [{ n: '', c: '', s: '', sc: '', q: 10, d: -1 }];
+let ownerMap = {};
 let img = null;
 const PRODUCTS = { name_sticker: 'Name Stickers', cover: 'Cover Pages', shapes: 'Shapes Print' };
 let mode = 'name_sticker';
@@ -37,7 +38,10 @@ async function init() {
     $('app').classList.remove('hide');
     const allowed = me.role === 'admin' ? Object.keys(PRODUCTS) : (me.products?.length ? me.products : ['name_sticker']);
     const tabs = [...allowed.map(p => [p, PRODUCTS[p]]),
-        ...(me.role === 'admin' ? [['dsn', 'Designs'], ['fnt', 'Fonts'], ['usr', 'Users']] : [])];
+        ['dsn', 'Designs'], ...(me.role === 'admin' ? [['fnt', 'Fonts'], ['usr', 'Users']] : [])];
+    $('dp').innerHTML = allowed.filter(p => p !== 'shapes').map(p => `<option value="${p}">${PRODUCTS[p]}</option>`).join('');
+    if (me.role !== 'admin')
+        $('dvl').classList.add('hide');
     $('nav').innerHTML = tabs.map(t => `<button id="t-${t[0]}" onclick="tab('${t[0]}')">${t[1]}</button>`).join('') +
         `<span style="margin-left:auto">${me.shop || me.email}</span><button onclick="sb.auth.signOut().then(()=>location.reload())">Logout</button>`;
     await loadAll();
@@ -46,6 +50,10 @@ async function init() {
 async function loadAll() {
     designs = (await sb.from('designs').select('*').eq('active', true).order('id')).data || [];
     fonts = (await sb.from('fonts').select('*').order('name')).data || [];
+    if (me.role === 'admin') {
+        const pr = (await sb.from('profiles').select('id,email,shop')).data || [];
+        ownerMap = Object.fromEntries(pr.map((p) => [p.id, p.shop || p.email]));
+    }
     await Promise.all(fonts.map(async (f) => {
         try {
             const ff = new FontFace(f.name, `url(${f.url})`);
@@ -61,6 +69,7 @@ async function loadAll() {
         if (v)
             s.value = v;
     });
+    fillFilters();
     fillDesigns();
     renderRows();
     renderLists();
@@ -81,11 +90,11 @@ function renderRows() {
     const keys = ['n', 'c', 's', 'sc'];
     $('rows').innerHTML = heads() +
         rows.map((r, i) => '<tr>' + keys.map((k, j) => `<td><input value="${String(r[k]).replace(/"/g, '&quot;')}" style="font-family:'${j ? f2 : f1}'" oninput="rows[${i}].${k}=this.value">`).join('') +
-            `<td style="width:70px"><input type="number" value="${r.q}" oninput="rows[${i}].q=+this.value"><td><button onclick="rows.splice(${i},1);renderRows()">✕</button></tr>`).join('');
+            `<td><select onchange="rows[${i}].d=+this.value">${dOpts(r.d)}</select><td style="width:70px"><input type="number" value="${r.q}" oninput="rows[${i}].q=+this.value"><td><button onclick="rows.splice(${i},1);renderRows()">✕</button></tr>`).join('');
 }
 function addRow() {
     const l = rows[rows.length - 1] || {};
-    rows.push({ n: '', c: l.c || '', s: l.s || '', sc: l.sc || '', q: 10 });
+    rows.push({ n: '', c: l.c || '', s: l.s || '', sc: l.sc || '', q: 10, d: l.d ?? -1 });
     renderRows();
 }
 ['f1', 'f2'].forEach(i => $(i).onchange = renderRows);
@@ -143,9 +152,8 @@ function gen() {
         const L = [r.n, r.c, r.s, r.sc].filter(x => x.trim());
         if (L.length)
             for (let i = 0; i < (r.q || 1); i++)
-                items.push(L);
+                items.push({ L, d: r.d });
     });
-    const cfg = curDesigns()[+$('dsel').value]?.config;
     const ox = (pw - (cols * w + (cols - 1) * g)) / 2, oy = (ph - (rw * h + (rw - 1) * g)) / 2;
     let st = document.getElementById('pgst');
     if (!st) {
@@ -157,7 +165,7 @@ function gen() {
     const box = $('pages');
     box.innerHTML = '';
     let pg;
-    items.forEach((L, i) => {
+    items.forEach(({ L, d }, i) => {
         if (i % per === 0) {
             pg = document.createElement('div');
             pg.className = 'page';
@@ -165,7 +173,7 @@ function gen() {
             box.appendChild(pg);
         }
         const k = i % per;
-        const s = sticker(cfg, L, w, h, $('f1').value, $('f2').value, +$('s1').value, +$('s2').value);
+        const s = sticker(designs.find(x => x.id === d)?.config, L, w, h, $('f1').value, $('f2').value, +$('s1').value, +$('s2').value);
         s.style.left = (ox + (k % cols) * (w + g)) + 'mm';
         s.style.top = (oy + Math.floor(k / cols) * (h + g)) + 'mm';
         pg.appendChild(s);
@@ -211,19 +219,29 @@ async function saveD() {
         alert('Name?');
         return;
     }
-    const { error } = await sb.from('designs').insert({ name: $('dn').value, config: dcfg(), product: $('dp').value });
+    const row = { name: $('dn').value, config: dcfg(), product: $('dp').value };
+    if (me.role === 'admin')
+        row.is_public = $('dv').value === '1';
+    const { error } = editId !== null
+        ? await sb.from('designs').update(row).eq('id', editId)
+        : await sb.from('designs').insert({ ...row, is_public: me.role === 'admin' && $('dv').value === '1' });
     if (error) {
         alert(error.message);
         return;
     }
-    img = null;
+    resetD();
     await loadAll();
 }
 function renderLists() {
-    if (me.role !== 'admin')
-        return;
-    $('dlist').innerHTML = designs.map(d => `<div>${d.name} <small>(${PRODUCTS[d.product || 'name_sticker'] || d.product})</small> <button onclick="delD(${d.id})">Delete</button></div>`).join('') || 'None';
-    $('flist').innerHTML = fonts.map(f => `<div style="font-family:'${f.name}';font-size:18px">${f.name} <small>(${f.kind})</small> <button onclick="delF(${f.id})">Delete</button></div>`).join('');
+    $('dlist').innerHTML = designs.filter(listMatch).map(d => {
+        const own = d.owner === me.id, adm = me.role === 'admin';
+        return `<div style="padding:3px 0">${d.name} <small>(${PRODUCTS[d.product || 'name_sticker'] || d.product} · ${d.is_public ? 'Public' : 'Personal'}${adm ? ' · ' + (ownerMap[d.owner || ''] || '—') : ''})</small> ` +
+            (adm ? `<button onclick="togPub(${d.id},${!d.is_public})">${d.is_public ? 'Make personal' : 'Make public'}</button> ` : '') +
+            (adm || (own && !d.is_public) ? `<button onclick="editD(${d.id})">Edit</button> ` : '') +
+            (adm || own ? `<button onclick="delD(${d.id})">Delete</button>` : '') + '</div>';
+    }).join('') || 'None';
+    if (me.role === 'admin')
+        $('flist').innerHTML = fonts.map(f => `<div style="font-family:'${f.name}';font-size:18px">${f.name} <small>(${f.kind})</small> <button onclick="delF(${f.id})">Delete</button></div>`).join('');
 }
 async function delD(id) { await sb.from('designs').update({ active: false }).eq('id', id); loadAll(); }
 async function delF(id) { await sb.from('fonts').delete().eq('id', id); loadAll(); }
@@ -277,12 +295,15 @@ sb.auth.getSession().then((r) => r.data.session && init());
 /* ================= multi-product additions ================= */
 function heads() {
     const H = mode === 'cover' ? ['Title / Subject', 'Name', 'Class', 'School'] : ['Name', 'Line 2 (class)', 'Line 3 (subject)', 'Line 4 (school)'];
-    return '<tr>' + H.map(x => '<th>' + x).join('') + '<th>Copies<th></tr>';
+    return '<tr>' + H.map(x => '<th>' + x).join('') + '<th>Design<th>Copies<th></tr>';
 }
-function curDesigns() { return designs.filter(d => (d.product || 'name_sticker') === mode); }
+function curDesigns() {
+    const f = document.getElementById('dfl')?.value || '';
+    return designs.filter(d => (d.product || 'name_sticker') === mode && dMatch(d, f));
+}
 function fillDesigns() {
     $('dsel').innerHTML = '<option value="-1">Plain border</option>' +
-        curDesigns().map((d, i) => `<option value="${i}">${d.name}</option>`).join('');
+        curDesigns().map(d => `<option value="${d.id}">${dlabel(d)}</option>`).join('');
 }
 function setMode(m) {
     mode = m;
@@ -290,7 +311,7 @@ function setMode(m) {
     $('fp').checked = cv;
     $('s1').value = cv ? '36' : '20';
     $('s2').value = cv ? '22' : '14';
-    rows.forEach(r => { if (r.q === (cv ? 10 : 1))
+    rows.forEach(r => { r.d = -1; if (r.q === (cv ? 10 : 1))
         r.q = cv ? 1 : 10; });
     fillDesigns();
     renderRows();
@@ -390,4 +411,82 @@ function genShapes() {
     });
     fit(box);
     $('sinfo').textContent = `${items.length} shapes · ${box.children.length} page(s)` + (tooBig ? ` · ${tooBig} larger than the page!` : '');
+}
+/* ---------- per-row designs & visibility ---------- */
+function dlabel(d) { return d.name + (d.is_public === false ? ' (personal)' : ''); }
+function dOpts(sel) {
+    const list = curDesigns(), cur = designs.find(x => x.id === sel);
+    if (cur && !list.includes(cur) && (cur.product || 'name_sticker') === mode)
+        list.push(cur); // keep a hidden chosen design visible
+    return '<option value="-1">Plain border</option>' +
+        list.map(d => `<option value="${d.id}" ${d.id === sel ? 'selected' : ''}>${dlabel(d)}</option>`).join('');
+}
+function applyAll() { rows.forEach(r => r.d = +$('dsel').value); renderRows(); }
+async function togPub(id, pub) {
+    const { error } = await sb.from('designs').update({ is_public: pub }).eq('id', id);
+    if (error)
+        alert(error.message);
+    loadAll();
+}
+/* ---------- edit & filters ---------- */
+let editId = null;
+function dMatch(d, own) {
+    if (!own)
+        return true;
+    if (own === 'pub')
+        return !!d.is_public;
+    if (own === 'mine')
+        return d.owner === me.id;
+    return d.owner === own;
+}
+function listMatch(d) {
+    const q = $('fq').value.trim().toLowerCase(), p = $('fprod').value, v = $('fvis').value;
+    return dMatch(d, $('fown').value) && (!p || (d.product || 'name_sticker') === p) &&
+        (!v || String(+!!d.is_public) === v) && (!q || d.name.toLowerCase().includes(q));
+}
+function fillFilters() {
+    const owners = me.role === 'admin' ? Object.entries(ownerMap).map(([id, n]) => `<option value="${id}">${n}</option>`).join('') : '';
+    const base = '<option value="">All designs</option><option value="mine">My designs</option>';
+    const set = (id, html) => {
+        const e = $(id), v = e.value;
+        e.innerHTML = html;
+        e.value = v;
+        if (!e.value)
+            e.selectedIndex = 0;
+    };
+    set('fown', base + owners);
+    set('dfl', base + '<option value="pub">Public only</option>' + owners);
+}
+function editD(id) {
+    const d = designs.find(x => x.id === id);
+    if (!d)
+        return;
+    const c = d.config;
+    editId = id;
+    img = c.img || null;
+    $('dn').value = d.name;
+    $('dp').value = d.product || 'name_sticker';
+    $('dv').value = d.is_public ? '1' : '0';
+    $('b1').value = c.b1 || '#ffffff';
+    $('b2').value = c.b2 || '#ffffff';
+    $('bc').value = c.bc || '#000000';
+    $('bw').value = String(c.bw ?? 1);
+    $('bs').value = c.bs || 'solid';
+    $('br').value = String(c.br || 0);
+    $('al').value = c.al || 'left';
+    $('is').value = c.is || 'right';
+    $('iz').value = String(c.iz || 70);
+    $('savebtn').textContent = 'Update design';
+    $('cancelbtn').classList.remove('hide');
+    prevD();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function resetD() {
+    editId = null;
+    img = null;
+    $('dn').value = '';
+    $('im').value = '';
+    $('savebtn').textContent = 'Save design';
+    $('cancelbtn').classList.add('hide');
+    $('dprev').innerHTML = '';
 }
